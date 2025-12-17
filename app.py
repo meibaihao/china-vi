@@ -57,9 +57,10 @@ model, scaler, encoders, feature_list = load_assets()
 EDU_MAP = {"1": "高中及以上", "2": "中学", "3": "小学", "4": "文盲/半文盲"}
 RURAL_MAP = {"1": "城市", "2": "农村"}
 BINARY_MAP = {"0": "否", "1": "是"}
+HAS_MAP = {"0": "无", "1": "有"}
 HEAR_MAP = {"0": "正常", "1": "听力障碍"}
 
-# --- 重点：根据 SHAP 图更新的前 15 指标 ---
+# 根据 SHAP 图确定的核心指标（包含用户要求的变量）
 TOP_15_FEATURES = [
     'hear', 'province', 'age', 'edu', 'total_cognition', 
     'rural', 'fcamt', 'executive', 'memeory', 'pension', 
@@ -68,22 +69,21 @@ TOP_15_FEATURES = [
 
 # --- 4. 页面主体 ---
 st.title("👓 中老年人视力障碍风险预测系统")
-st.info("本系统已根据 SHAP 解释性分析更新，优先采用对预测结果影响最显著的 15 项核心指标。")
 
 if model is None:
-    st.error(f"❌ 资源加载失败。请检查路径。错误: {feature_list}")
+    st.error(f"❌ 资源加载失败。错误: {feature_list}")
     st.stop()
 
 # --- 5. 模式选择 ---
 st.subheader("第一步：选择筛查模式")
 mode = st.selectbox(
     "请选择适合您的筛查版本：",
-    options=["请选择...", "精简版 (基于 SHAP 核心 15 指标)", "完整版 (全量指标预测)"],
+    options=["请选择...", "精简版 (15个核心指标)", "完整版 (全量指标)"],
     index=0
 )
 
 if mode == "请选择...":
-    st.warning("👈 请在上方下拉框中选择一个版本以开始录入数据。")
+    st.warning("👈 请在上方下拉框中选择一个版本以开始。")
     st.stop()
 
 st.markdown("---")
@@ -92,8 +92,8 @@ st.subheader("第二步：录入受试者数据")
 user_inputs = {}
 is_simplified = "精简版" in mode
 
-# 选项卡布局：根据新的 15 指标重新组织
-tab1, tab2, tab3 = st.tabs(["人口学与背景", "生理与感官", "认知与社会经济"])
+# 选项卡布局
+tab1, tab2, tab3 = st.tabs(["基本人口学", "生理与感官", "认知、社会与支持"])
 
 with tab1:
     col1, col2 = st.columns(2)
@@ -103,32 +103,41 @@ with tab1:
         user_inputs['rural'] = st.selectbox("居住环境 (rural)", options=["1", "2"], format_func=lambda x: RURAL_MAP[x])
     with col2:
         user_inputs['edu'] = st.selectbox("教育情况 (edu)", options=["1", "2", "3", "4"], format_func=lambda x: EDU_MAP[x])
-        user_inputs['pension'] = st.selectbox("退休/养老金状况 (pension)", options=["0", "1"], format_func=lambda x: "无" if x=="0" else "有")
+        user_inputs['pension'] = st.selectbox("退休/养老金状况 (pension)", options=["0", "1"], format_func=lambda x: HAS_MAP[x])
 
 with tab2:
     col3, col4 = st.columns(2)
     with col3:
         user_inputs['hear'] = st.selectbox("听力障碍 (hear)", options=["0", "1"], format_func=lambda x: HEAR_MAP[x])
-        user_inputs['mweight'] = st.number_input("体重 (kg) (mweight)", 30.0, 150.0, 65.0)
+        user_inputs['mweight'] = st.number_input("体重 (kg)", 30.0, 150.0, 65.0)
+        user_inputs['mheight'] = st.number_input("身高 (cm)", 100.0, 220.0, 165.0)
     with col4:
-        user_inputs['mheight'] = st.number_input("身高 (cm) (mheight)", 100.0, 220.0, 165.0)
-        user_inputs['da042s_total'] = st.slider("疼痛/身体不适评分 (da042s_total)", 0, 50, 5)
+        # 修改：da042s_total 改为 疼痛评分（部位），范围 0-15
+        user_inputs['da042s_total'] = st.slider("疼痛评分 (部位) (da042s_total)", 0, 15, 0)
 
 with tab3:
     col5, col6 = st.columns(2)
     with col5:
-        user_inputs['total_cognition'] = st.slider("总认知能力 (total_cognition)", 0, 40, 25)
-        user_inputs['executive'] = st.slider("心智执行力 (executive)", 0, 20, 10)
-        user_inputs['memeory'] = st.slider("记忆能力 (memeory)", 0, 20, 10)
+        # 修改：认知能力 (0-21)，执行力 (0-11)，记忆力 (0-9.5)
+        user_inputs['total_cognition'] = st.slider("认知能力总分 (0-21)", 0, 21, 15)
+        user_inputs['executive'] = st.slider("心智执行力 (0-11)", 0, 11, 5)
+        user_inputs['memeory'] = st.slider("记忆能力 (0-9.5)", 0.0, 9.5, 5.0, step=0.5)
     with col6:
-        user_inputs['fcamt'] = st.number_input("子女经济支持金额 (fcamt)", 0, 100000, 1000)
-        user_inputs['income_total'] = st.number_input("家庭总收入 (income_total)", 0, 500000, 20000)
-        user_inputs['social_total'] = st.slider("社会交往评分 (social_total)", 0, 100, 50)
+        # 修改：fcamt 和 tcamt (此处用 income_total 占位或若模型包含 tcamt 请替换) 变成 1/0
+        user_inputs['fcamt'] = st.selectbox("是否有子女经济支持 (fcamt)", options=["0", "1"], format_func=lambda x: HAS_MAP[x])
+        
+        # 针对您提到的 tcamt，如果在 feature_list 中则录入，否则录入模型需要的 income_total
+        if 'tcamt' in feature_list:
+            user_inputs['tcamt'] = st.selectbox("是否有转移收入 (tcamt)", options=["0", "1"], format_func=lambda x: HAS_MAP[x])
+        else:
+            user_inputs['income_total'] = st.number_input("家庭年总收入 (元)", 0, 500000, 20000)
+            
+        # 修改：社交评分 (0-9)
+        user_inputs['social_total'] = st.slider("社交评分 (0-9)", 0, 9, 5)
 
 # 如果是完整版，展示其余变量
 if not is_simplified:
     with st.expander("更多详细指标 (完整版选填)"):
-        st.caption("以下特征将使用默认值填充：")
         remaining_features = [f for f in feature_list if f not in user_inputs]
         cols = st.columns(3)
         for idx, feat in enumerate(remaining_features):
@@ -137,27 +146,28 @@ if not is_simplified:
 # --- 6. 侧边栏配置 ---
 with st.sidebar:
     st.header("⚙️ 系统配置")
-    st.info(f"当前模式: {mode.split('(')[0]}")
-    st.divider()
     optimal_threshold = st.number_input("风险判断阈值", 0.1, 0.9, 0.45, 0.01)
-    st.markdown("---")
-    st.markdown("### SHAP 特征重要性说明")
-    st.caption("图中显示听力障碍、地区、年龄和教育程度是该模型最重要的四个预测因子。")
+    st.divider()
+    st.markdown("### 更新说明")
+    st.caption("1. 认知/执行/记忆量表评分范围已更新。")
+    st.caption("2. 疼痛评分更名为'部位评分'，范围 0-15。")
+    st.caption("3. 经济支持类指标已转为二元(有/无)输入。")
 
 # --- 7. 预测执行 ---
 st.markdown("---")
 if st.button("🚀 开始风险评估"):
-    with st.status("正在进行 AI 模型推理...", expanded=True) as status:
-        st.write("数据对齐中...")
+    with st.status("正在分析数据...", expanded=True) as status:
+        # 数据对齐
         final_data = {feat: user_inputs.get(feat, 0) for feat in feature_list}
         input_df = pd.DataFrame([final_data])[feature_list]
         
-        st.write("标签编码与特征缩放...")
+        # 编码转换
         for col, le in encoders.items():
             if col in input_df.columns:
                 val = str(input_df[col].values[0])
                 input_df[col] = le.transform([val])[0] if val in le.classes_ else 0
         
+        # 缩放与预测
         input_scaled = scaler.transform(input_df)
         prob = model.predict_proba(input_scaled)[:, 1][0]
         is_high_risk = prob >= optimal_threshold
@@ -165,30 +175,19 @@ if st.button("🚀 开始风险评估"):
 
     # --- 8. 结果展示 ---
     st.subheader("🔮 预测评估报告")
-    c_res1, c_res2 = st.columns([1, 2])
+    res_col1, res_col2 = st.columns([1, 2])
     
-    with c_res1:
-        st.metric(label="视力障碍风险概率", value=f"{prob:.2%}")
+    with res_col1:
+        st.metric(label="视力障碍患病概率", value=f"{prob:.2%}")
         if is_high_risk:
             st.error("结论：高风险人群")
         else:
             st.success("结论：低风险人群")
 
-    with c_res2:
-        st.write("#### 风险可视化")
+    with res_col2:
+        st.write("#### 风险程度")
         st.progress(prob)
-        st.caption(f"决策边界：{optimal_threshold:.2f} | 建议：{'请及时就医检查' if is_high_risk else '定期体检即可'}")
-
-# --- 9. 底部说明 ---
-with st.expander("🔬 SHAP 模型原理图解"):
-    st.markdown("""
-    ### 为什么选择这 15 个指标？
-        
-    我们通过 **SHAP (SHapley Additive exPlanations)** 方法对梯度提升模型进行了归因分析：
-    - **横轴 (SHAP Value)**: 右侧点表示该因素增加了患病风险，左侧表示降低风险。
-    - **颜色 (Feature Value)**: 红色代表该指标数值较高，蓝色代表数值较低。
-    - **例如 `hear`**: 顶部的红色簇聚集在右侧，说明有听力障碍的人群患视力障碍的风险显著升高。
-    """)
+        st.caption(f"当前阈值设定为: {optimal_threshold}")
 
 st.markdown("---")
 st.caption("© 2025 牡丹江医科大学护理学院 | 仅供科研参考")
