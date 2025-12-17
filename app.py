@@ -11,7 +11,7 @@ st.set_page_config(page_title="Vision Health Prediction Tool", layout="wide")
 @st.cache_resource
 def load_assets():
     # Update these paths to match your exported filenames
-    model = joblib.load('model_assets/best_model_lightgbm.pkl') # example name
+    model = joblib.load('model_assets/best_model.pkl') # example name
     scaler = joblib.load('model_assets/scaler.pkl')
     encoders = joblib.load('model_assets/label_encoders.pkl')
     with open('model_assets/feature_list.txt', 'r') as f:
