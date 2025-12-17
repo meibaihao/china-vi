@@ -116,6 +116,8 @@ st.sidebar.markdown("### 算法架构说明")
 st.sidebar.caption("引擎类型: Ensemble Gradient Boosting")
 st.sidebar.caption("交互深度: Max_Depth=5")
 st.sidebar.caption("概率校准: Isotonic Regression")
+st.sidebar.caption("开发者：牡丹江医科大学护理学院梅柏豪")
+st.sidebar.caption("email：3011891593@qq.com")
 
 if st.button("🚀 执行模型推理分析"):
     with st.status("正在进行多维特征交互计算...", expanded=True) as status:
