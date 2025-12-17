@@ -14,10 +14,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 自定义 CSS 样式
+# 自定义外观
 st.markdown("""
     <style>
-    .main { background-color: #f5f7f9; }
+    .main { background-color: #f8f9fa; }
     .stButton>button {
         width: 100%;
         border-radius: 8px;
@@ -26,10 +26,6 @@ st.markdown("""
         color: white;
         font-weight: bold;
     }
-    .stSelectbox label, .stNumberInput label {
-        font-weight: bold;
-        color: #1f1f1f;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -37,15 +33,15 @@ st.markdown("""
 @st.cache_resource
 def load_assets():
     try:
-        # 自动搜索模型文件
         model_files = glob.glob('model_assets/best_model*.pkl')
         if not model_files:
-            return None, None, None, "未找到模型文件 (.pkl)"
+            return None, None, None, "未找到模型文件"
         
         model = joblib.load(model_files[0])
         scaler = joblib.load('model_assets/scaler.pkl')
         encoders = joblib.load('model_assets/label_encoders.pkl')
         
+        # 严格按照您提供的 70 个特征顺序进行加载
         with open('model_assets/feature_list.txt', 'r', encoding='utf-8') as f:
             features = [line.strip().split('. ')[1] for line in f.readlines() if '. ' in line]
         return model, scaler, encoders, features
@@ -54,141 +50,127 @@ def load_assets():
 
 model, scaler, encoders, feature_list = load_assets()
 
-# --- 3. 映射字典定义 (确保后台传输正确数值) ---
-EDU_MAP = {"1": "高中及以上", "2": "中学", "3": "小学", "4": "文盲/半文盲"}
-GENDER_MAP = {"1": "男", "2": "女"}
-RURAL_MAP = {"1": "城市", "2": "农村"}
-MARRY_MAP = {"1": "已婚", "2": "未婚离异/丧偶"}
-BINARY_MAP = {"0": "否", "1": "是"}
-
-# 精简版核心 15 指标
-TOP_15_FEATURES = [
-    'age', 'gender', 'bmi', 'systo', 'diasto', 'total_cognition', 
-    'srh', 'rural', 'edu', 'hibpe', 'diabe', 'hearte', 
-    'exercise', 'smokev', 'marry'
+# --- 3. 核心变量定义 (基于 SHAP 图排序) ---
+# 映射说明：
+# 听力障碍 -> hear, 出生地区 -> rural, 年龄 -> age, 教育情况 -> edu, 认知能力 -> total_cognition
+# 居住环境 -> water, 子女支持 -> hchild, 心智状况 -> psyche, 记忆能力 -> memrye, 退休状况 -> pension
+# 体重 -> mweight, 社会评分 -> social_total, 疼痛评分 -> da042s_total, 收入 -> income_total, 身高 -> mheight
+TOP_15_SHAP_FEATURES = [
+    'hear', 'rural', 'age', 'edu', 'total_cognition', 
+    'water', 'hchild', 'psyche', 'memrye', 'pension', 
+    'mweight', 'social_total', 'da042s_total', 'income_total', 'mheight'
 ]
 
-# --- 4. 页面主体 ---
-st.title("👓 中老年人视力障碍风险预测系统")
-st.info("本系统基于校准后的梯度提升模型，旨在为中老年人群提供视力障碍风险的早期预警。")
+# 选项映射
+MAPS = {
+    'gender': {"1": "男", "2": "女"},
+    'rural': {"1": "城镇", "2": "农村"},
+    'edu': {"1": "高中及以上", "2": "中学", "3": "小学", "4": "不识字/半不识字"},
+    'hear': {"0": "正常", "1": "有障碍"},
+    'pension': {"0": "无", "1": "有"},
+    'psyche': {"0": "良好", "1": "有心理/精神压力"},
+    'memrye': {"1": "优", "2": "良", "3": "一般", "4": "差", "5": "极差"},
+    'water': {"1": "自来水", "2": "井水/泉水", "3": "其他"},
+    'binary': {"0": "否", "1": "是"}
+}
+
+# --- 4. 界面展示 ---
+st.title("👓 中老年人视力障碍风险筛查系统")
+st.markdown("---")
 
 if model is None:
-    st.error(f"❌ 资源加载失败。请检查路径。错误: {feature_list}")
+    st.error(f"❌ 资源加载失败: {feature_list}")
     st.stop()
 
-# --- 5. 模式选择 (第一步) ---
-st.subheader("第一步：选择筛查模式")
+# 模式选择
+st.subheader("第一步：选择预测模式")
 mode = st.selectbox(
-    "请选择适合您的筛查版本：",
-    options=["请选择...", "精简版 (适合快速筛查 - 15个核心指标)", "完整版 (适合精准科研 - 全量指标)"],
-    index=0
+    "根据 SHAP 重要性评估，建议使用精简版进行快速筛查：",
+    options=["请选择模式...", "精简版 (基于核心 15 项指标)", "完整版 (全量 70 项指标)"]
 )
 
-if mode == "请选择...":
-    st.warning("👈 请在上方下拉框中选择一个版本以开始录入数据。")
+if mode == "请选择模式...":
     st.stop()
 
 st.markdown("---")
-st.subheader("第二步：录入受试者数据")
+st.subheader("第二步：录入受试者信息")
 
 user_inputs = {}
-
-# 模式判断逻辑
 is_simplified = "精简版" in mode
 
-# 选项卡布局
-tab1, tab2, tab3 = st.tabs(["基本人口学", "临床生理指标", "既往病史与习惯"])
+# 布局设计
+tab1, tab2, tab3 = st.tabs(["🧬 人口学与身体指标", "🧠 认知与心理", "🏡 生活环境与社会"])
 
 with tab1:
-    col1, col2 = st.columns(2)
-    with col1:
-        user_inputs['gender'] = st.selectbox("性别", options=["1", "2"], format_func=lambda x: GENDER_MAP[x])
-        user_inputs['age'] = st.number_input("年龄", 45, 120, 65)
-        user_inputs['rural'] = st.selectbox("居住地", options=["1", "2"], format_func=lambda x: RURAL_MAP[x])
-    with col2:
-        # 修正后的教育程度逻辑
-        user_inputs['edu'] = st.selectbox("受教育程度", options=["1", "2", "3", "4"], format_func=lambda x: EDU_MAP[x])
-        user_inputs['marry'] = st.selectbox("婚姻状况", options=["1", "2"], format_func=lambda x: MARRY_MAP[x])
+    c1, c2 = st.columns(2)
+    with c1:
+        user_inputs['age'] = st.number_input("年龄 (age)", 45, 120, 65)
+        user_inputs['mheight'] = st.number_input("身高 cm (mheight)", 100, 220, 160)
+        user_inputs['mweight'] = st.number_input("体重 kg (mweight)", 30, 150, 60)
+    with c2:
+        user_inputs['rural'] = st.selectbox("居住/出生地区 (rural)", ["1", "2"], format_func=lambda x: MAPS['rural'][x])
+        user_inputs['edu'] = st.selectbox("受教育情况 (edu)", ["1", "2", "3", "4"], format_func=lambda x: MAPS['edu'][x])
+        user_inputs['income_total'] = st.number_input("年总收入 (income_total)", 0, 1000000, 20000)
 
 with tab2:
-    col3, col4 = st.columns(2)
-    with col3:
-        user_inputs['bmi'] = st.number_input("BMI (体重指数)", 10.0, 50.0, 23.5)
-        user_inputs['systo'] = st.number_input("收缩压 (mmHg)", 50, 220, 130)
-    with col4:
-        user_inputs['diasto'] = st.number_input("舒张压 (mmHg)", 30, 150, 85)
-        user_inputs['total_cognition'] = st.slider("认知功能总分", 0, 40, 25)
+    c3, c4 = st.columns(2)
+    with c3:
+        user_inputs['hear'] = st.selectbox("听力障碍情况 (hear)", ["0", "1"], format_func=lambda x: MAPS['hear'][x])
+        user_inputs['total_cognition'] = st.slider("认知能力评分 (total_cognition)", 0, 40, 20)
+        user_inputs['memrye'] = st.selectbox("记忆能力评价 (memrye)", ["1", "2", "3", "4", "5"], format_func=lambda x: MAPS['memrye'][x])
+    with c4:
+        user_inputs['psyche'] = st.selectbox("心智/精神状况 (psyche)", ["0", "1"], format_func=lambda x: MAPS['psyche'][x])
+        user_inputs['da042s_total'] = st.number_input("身体疼痛评分 (da042s_total)", 0, 50, 5)
 
 with tab3:
-    col5, col6 = st.columns(2)
-    with col5:
-        user_inputs['srh'] = st.select_slider("自评健康状况", options=["1", "2", "3", "4", "5"], value="3", help="1为最差，5为最好")
-        user_inputs['hibpe'] = st.selectbox("患有高血压", options=["0", "1"], format_func=lambda x: BINARY_MAP[x])
-        user_inputs['diabe'] = st.selectbox("患有糖尿病", options=["0", "1"], format_func=lambda x: BINARY_MAP[x])
-    with col6:
-        user_inputs['hearte'] = st.selectbox("患有心脏病", options=["0", "1"], format_func=lambda x: BINARY_MAP[x])
-        user_inputs['smokev'] = st.selectbox("曾有吸烟史", options=["0", "1"], format_func=lambda x: BINARY_MAP[x])
-        user_inputs['exercise'] = st.selectbox("经常参加体育锻炼", options=["0", "1"], format_func=lambda x: BINARY_MAP[x])
+    c5, c6 = st.columns(2)
+    with c5:
+        user_inputs['water'] = st.selectbox("居住饮水环境 (water)", ["1", "2", "3"], format_func=lambda x: MAPS['water'][x])
+        user_inputs['hchild'] = st.number_input("子女支持/数量 (hchild)", 0, 15, 2)
+    with c6:
+        user_inputs['social_total'] = st.number_input("社会活动参与评分 (social_total)", 0, 100, 30)
+        user_inputs['pension'] = st.selectbox("退休金状况 (pension)", ["0", "1"], format_func=lambda x: MAPS['pension'][x])
 
-# 如果是完整版，展示其余变量
+# 完整版补充输入
 if not is_simplified:
-    with st.expander("更多详细指标 (完整版选填)"):
-        st.caption("以下特征将使用默认值(0)填充，如有具体数据请修改：")
+    with st.expander("🔍 录入其余补充特征 (非核心变量)"):
+        st.info("以下特征将使用默认值填充，如有数据请修改。")
         remaining_features = [f for f in feature_list if f not in user_inputs]
         cols = st.columns(3)
         for idx, feat in enumerate(remaining_features):
             user_inputs[feat] = cols[idx % 3].number_input(f"{feat}", value=0.0)
 
-# --- 6. 侧边栏配置 (阈值调整) ---
-with st.sidebar:
-    st.header("⚙️ 系统配置")
-    st.info(f"当前模式: {mode.split('(')[0]}")
-    st.divider()
-    optimal_threshold = st.number_input("风险判断阈值", 0.1, 0.9, 0.45, 0.01, help="概率高于此值将被判定为高风险")
-    st.divider()
-    st.markdown("### 模型技术文档")
-    st.caption("算法: Calibrated LGBM/GBoost")
-    st.caption("训练数据: 中国中老年健康调查数据")
-
-# --- 7. 预测执行 ---
+# --- 5. 预测执行 ---
 st.markdown("---")
-if st.button("🚀 开始风险评估"):
-    with st.status("正在进行AI模型推理...", expanded=True) as status:
-        st.write("数据预处理中...")
-        # 特征对齐与补全
-        final_data = {}
+if st.button("🚀 开始 AI 风险评估"):
+    with st.status("正在调取预测引擎...", expanded=True) as status:
+        # 1. 特征全量对齐 (关键步：补齐 70 个特征)
+        full_data = {}
         for feat in feature_list:
-            final_data[feat] = user_inputs.get(feat, 0) # 补全缺失项
-            
-        input_df = pd.DataFrame([final_data])[feature_list]
-        time.sleep(0.4)
+            # 如果是精简版中未录入的变量，填充 0
+            full_data[feat] = user_inputs.get(feat, 0)
         
-        st.write("分类特征转换中...")
-        # 标签编码
+        # 转换为 DataFrame 并严格排序
+        df = pd.DataFrame([full_data])[feature_list]
+        
+        # 2. 标签编码
         for col, le in encoders.items():
-            if col in input_df.columns:
-                val = str(input_df[col].values[0])
-                if val in le.classes_:
-                    input_df[col] = le.transform([val])[0]
-                else:
-                    input_df[col] = 0
-        time.sleep(0.4)
+            if col in df.columns:
+                val = str(df[col].values[0])
+                df[col] = le.transform([val])[0] if val in le.classes_ else 0
         
-        st.write("执行概率拟合与校准...")
-        # 缩放
-        input_scaled = scaler.transform(input_df)
-        # 预测
-        prob = model.predict_proba(input_scaled)[:, 1][0]
-        is_high_risk = prob >= optimal_threshold
-        time.sleep(0.4)
+        # 3. 预测
+        df_scaled = scaler.transform(df)
+        prob = model.predict_proba(df_scaled)[:, 1][0]
+        is_high_risk = prob >= OPTIMAL_THRESHOLD
         
-        status.update(label="评估完成！", state="complete", expanded=False)
+        status.update(label="计算完成！", state="complete", expanded=False)
 
-    # --- 8. 结果展示 ---
-    st.subheader("🔮 预测评估报告")
-    c_res1, c_res2 = st.columns([1, 2])
+    # --- 6. 结果展示 ---
+    st.subheader("📊 评估结果报告")
+    col_res1, col_res2 = st.columns([1, 2])
     
-    with c_res1:
+    with col_res1:
         st.metric(label="视力障碍患病概率", value=f"{prob:.2%}")
         if is_high_risk:
             st.error("结论：高风险人群")
@@ -196,30 +178,24 @@ if st.button("🚀 开始风险评估"):
             st.success("结论：低风险人群")
             st.balloons()
 
-    with c_res2:
-        st.write("#### 风险可视化")
+    with col_res2:
+        st.write("#### 风险走势")
         st.progress(prob)
-        st.caption(f"决策边界为 {optimal_threshold:.2f}。当前概率为 {prob:.2%}。")
-        
+        st.caption(f"当前判断阈值为: {OPTIMAL_THRESHOLD}")
         if is_high_risk:
-            st.warning("⚠️ 建议：系统检测到较高的视力障碍风险，建议近期前往正规医疗机构进行专业验光与眼底检查。")
+            st.warning("⚠️ 建议：检测到较高风险。建议受试者尽快前往医院眼科进行专业验光和眼底检查。")
         else:
-            st.info("💡 建议：目前风险较低，请继续保持良好的用眼习惯，并定期进行健康体检。")
+            st.info("💡 建议：目前风险较低，建议保持良好的用眼习惯，并定期进行年度眼科检查。")
 
-# --- 9. 底部说明 ---
-with st.expander("🔬 系统原理与指标说明"):
+# --- 7. 系统原理 ---
+with st.expander("🔬 预测原理说明"):
+    st.write("本系统基于 **Gradient Boosting (梯度提升树)** 算法开发，并使用 **SHAP** 解释工具确定特征权重。")
+    
     st.markdown("""
-    
-    ### 系统逻辑
-    1. **数据处理**: 针对不同筛查模式，系统会自动对齐 15 个核心变量或全量变量。
-    2. **SHAP 原理**: 精简版选取的 15 个指标是根据 SHAP (SHapley Additive exPlanations) 贡献度选取的对视力健康影响最显著的因素。
-    3. **概率校准**: 原始模型输出经过 Platt Scaling/Isotonic 校准，使概率值更具临床参考意义。
-    
-    ### 指标名词
-    - **BMI**: 体重(kg) / 身高的平方($m^2$)。
-    - **认知总分**: 反映中枢神经系统与视觉系统的协同健康状况。
-    - **收缩压**: 俗称“高压”，长期高血压可能损害视网膜微血管。
+    **精简版指标选取逻辑：**
+    根据 SHAP 贡献图，**听力障碍 (hear)** 和 **居住地 (rural)** 是对视力障碍预测贡献最大的因素。
+    心智与认知状况（如认知得分、记忆评价）对中老年视力健康的预测也具有极高的敏感度。
     """)
 
 st.markdown("---")
-st.caption("© 2025 牡丹江医科大学护理学院 - 梅柏豪开发 邮箱：3011891593@qq.com | 仅供科研参考，不作为临床诊断依据")
+st.caption("© 2025 牡丹江医科大学护理学院 - 梅柏豪开发 | 仅供科研参考")
