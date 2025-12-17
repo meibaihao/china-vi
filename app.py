@@ -36,7 +36,7 @@ def load_assets():
     try:
         # 尝试自动搜索模型文件
         import glob
-        model_path = glob.glob('model_assets/best_model_*.pkl')[0]
+        model_path = glob.glob('model_assets/best_model.pkl')[0]
         model = joblib.load(model_path)
         scaler = joblib.load('model_assets/scaler.pkl')
         encoders = joblib.load('model_assets/label_encoders.pkl')
