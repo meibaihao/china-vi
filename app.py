@@ -58,7 +58,7 @@ model, scaler, encoders, feature_list = load_assets()
 EDU_MAP = {"1": "高中及以上", "2": "中学", "3": "小学", "4": "文盲/半文盲"}
 GENDER_MAP = {"1": "男", "2": "女"}
 RURAL_MAP = {"1": "城市", "2": "农村"}
-MARRY_MAP = {"1": "已婚", "2": "未婚", "离异/丧偶"}
+MARRY_MAP = {"1": "已婚", "2": "未婚离异/丧偶"}
 BINARY_MAP = {"0": "否", "1": "是"}
 
 # 精简版核心 15 指标
