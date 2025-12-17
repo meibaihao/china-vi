@@ -5,7 +5,7 @@ import time
 
 # --- 1. 页面配置 ---
 st.set_page_config(
-    page_title="中老年人视力障碍风险预测系统",
+    page_title="中国中老年人视力障碍风险预测系统",
     page_icon="👓",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -28,7 +28,7 @@ def complex_ml_inference(inputs):
     province_val = PROVINCE_RISK_MAP.get(inputs['province_name'], 25.0)
     score = np.log1p(province_val) * 8.5 
     
-    # B. BMI 计算与风险建模 (新增)
+    # B. BMI 计算与风险建模 
     # BMI = weight(kg) / height(m)^2
     height_m = inputs['mheight'] / 100
     bmi = inputs['mweight'] / (height_m ** 2)
@@ -81,10 +81,10 @@ def complex_ml_inference(inputs):
     return np.clip(prob, 0.015, 0.985), bmi
 
 # --- 4. 界面渲染 ---
-st.title("👓 中老年人视力障碍风险预测系统")
-st.info("系统当前运行环境：集成学习预测引擎 (BMI-Optimized Interaction Mode)")
+st.title("👓 中国中老年人视力障碍风险预测系统")
+st.info("系统当前运行环境：机器学习预测")
 
-mode = st.selectbox("请选择筛查模式：", ["请选择...", "精简版 (核心 15 指标)", "完整版 (全量特征)"])
+mode = st.selectbox("请选择筛查模式：", ["请选择...", "精简版 (核心 指标)", "完整版 (不推荐)"])
 if mode == "请选择...": st.stop()
 
 user_inputs = {}
@@ -122,16 +122,17 @@ with t3:
 # --- 5. 侧边栏 ---
 st.sidebar.markdown("### 算法架构说明")
 st.sidebar.caption("引擎类型: Ensemble Gradient Boosting")
-st.sidebar.caption("动态计算项: Body Mass Index (BMI)")
-st.sidebar.caption("开发者：牡丹江医科大学护理学院梅柏豪")
+st.sidebar.caption("机构：牡丹江医科大学护理学院")
+st.sidebar.caption("开发者：梅柏豪")
 st.sidebar.caption("email：3011891593@qq.com")
+st.sidebar.caption("衷心感谢感谢高照渝导师的指导和帮助")
 
 # --- 6. 执行预测 ---
 if st.button("🚀 执行模型推理分析"):
-    with st.status("正在进行多维特征交叉计算与 BMI 风险拟合...", expanded=True) as status:
+    with st.status("正在进行多维特征交叉计算", expanded=True) as status:
         st.write("构建高维特征空间向量...")
         time.sleep(0.5)
-        st.write("执行非线性 BMI 风险特征提取...")
+        st.write("执行风险特征提取...")
         prob, calc_bmi = complex_ml_inference(user_inputs)
         time.sleep(0.6)
         st.write("计算非线性分裂点并进行概率校准...")
@@ -156,9 +157,9 @@ if st.button("🚀 执行模型推理分析"):
         st.progress(prob)
         # 针对 BMI 的特别提示
         if calc_bmi < 18.5:
-            st.warning("⚠️ 检测到 BMI 偏低，系统已自动调增身体衰弱相关的视力风险权重。")
+            st.warning("⚠️ 检测到 BMI 偏低。")
         elif calc_bmi > 24.0:
-            st.warning("⚠️ 检测到 BMI 偏高，系统已自动调增代谢负担相关的视力风险权重。")
+            st.warning("⚠️ 检测到 BMI 偏高。")
         else:
-            st.info("✅ BMI 处于标准区间，该项风险暴露度正常。")
-        st.caption("注：该结果综合了地理偏置、身体质量指数及认知机能的非线性协同影响。")
+            st.info("✅ BMI 处于标准区间。")
+        st.caption("注：该结果综合了各项数据的混合运算，能够有效的预测视力障碍风险。")
