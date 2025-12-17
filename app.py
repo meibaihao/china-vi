@@ -77,7 +77,7 @@ with st.sidebar:
     st.subheader("📊 模型信息")
     st.info("当前算法：Calibrated Gradient Boosting")
     OPTIMAL_THRESHOLD = st.number_input("决策阈值 (Threshold)", value=0.45, step=0.01)
-    st.write("注：高于此概率将被判定为需戴眼镜。")
+    st.write("注：高于此概率即为可能高风险视力障碍人群。")
 
 # --- 输入表单 ---
 st.header("📋 受试者信息录入")
@@ -96,10 +96,10 @@ with tab1:
     with col1:
         user_inputs['gender'] = st.selectbox("性别", ["1", "2"], format_func=lambda x: "男 (1)" if x=="1" else "女 (2)")
         user_inputs['age'] = st.number_input("年龄", 0, 120, 60)
-        user_inputs['rural'] = st.selectbox("居住地", ["1", "2"], format_func=lambda x: "农村 (1)" if x=="1" else "城市 (2)")
+        user_inputs['rural'] = st.selectbox("居住地", ["1", "2"], format_func=lambda x: "城市 (1)" if x=="1" else "农村 (2)")
     with col2:
         user_inputs['edu'] = st.selectbox("受教育程度", ["1", "2", "3", "4"], format_func=lambda x: f"级别 {x}")
-        user_inputs['marry'] = st.selectbox("婚姻状况", ["1", "2", "3"], format_func=lambda x: f"状态 {x}")
+        user_inputs['marry'] = st.selectbox("婚姻状况", ["1", "2"], format_func=lambda x: "已婚(1)" if x=="1" else "未婚 (2)")
 
 with tab2:
     col3, col4 = st.columns(2)
