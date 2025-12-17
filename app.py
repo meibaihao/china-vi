@@ -34,7 +34,7 @@ based on demographic and health indicators.
 # --- Sidebar: Model Info ---
 with st.sidebar:
     st.header("Model Statistics")
-    st.info("Best Model: LightGBM (Calibrated)")
+    st.info(" Model: gboost (Calibrated)")
     st.write("Target: Glass Requirement")
     # You can manually input the threshold found in your model_info.txt
     OPTIMAL_THRESHOLD = 0.45 
